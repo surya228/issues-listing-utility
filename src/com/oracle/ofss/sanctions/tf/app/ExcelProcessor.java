@@ -24,10 +24,18 @@ public class ExcelProcessor {
 
         String inputDir = config.getProperty("inputDirectory");
         String outputDir = config.getProperty("outputDirectory", inputDir);
-        int statusCol1 = Integer.parseInt(config.getProperty("TestStatusOS.column"));
-        String statusCol2Str = config.getProperty("TestStatusOT.column");
-        Integer statusCol2 = statusCol2Str != null ? Integer.parseInt(statusCol2Str) : null;
+        String osColStr = config.getProperty("TestStatusOS.column");
+        String otColStr = config.getProperty("TestStatusOT.column");
+        Integer osCol = osColStr != null ? Integer.parseInt(osColStr) : null;
+        Integer otCol = otColStr != null ? Integer.parseInt(otColStr) : null;
+        int[] osCols = parseColumns(config.getProperty("TestStatusOS.columns"));
+        int[] otCols = parseColumns(config.getProperty("TestStatusOT.columns"));
         int ruleNameCol = Integer.parseInt(config.getProperty("ruleNameColumn"));
+
+        if (osCol == null && otCol == null) {
+            System.err.println("Error: At least one of TestStatusOS.column or TestStatusOT.column must be provided.");
+            return;
+        }
 
         // Ensure output directory exists
         try {
@@ -37,14 +45,14 @@ public class ExcelProcessor {
             return;
         }
 
-        // Collect unique FAIL entries
-        Set<String> failsCol1 = new LinkedHashSet<>();
-        Set<String> failsCol2 = statusCol2 != null ? new LinkedHashSet<>() : null;
+        // Collect unique FAIL entries with full data
+        Map<String, String[]> osData = osCol != null ? new LinkedHashMap<>() : null;
+        Map<String, String[]> otData = otCol != null ? new LinkedHashMap<>() : null;
 
         // Process input files
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(inputDir), "*.xlsx")) {
             for (Path filePath : stream) {
-                processFile(filePath.toString(), statusCol1, statusCol2, ruleNameCol, failsCol1, failsCol2);
+                processFile(filePath.toString(), osCol, otCol, osCols, otCols, osData, otData);
             }
         } catch (IOException e) {
             System.err.println("Error processing input directory: " + e.getMessage());
@@ -57,11 +65,11 @@ public class ExcelProcessor {
         String outputFile = outputDir + File.separator + "Issues_" + timestamp + ".xlsx";
 
         // Write output
-        writeOutput(outputFile, failsCol1, failsCol2);
+        writeOutput(outputFile, osData, otData);
         System.out.println("Output written to: " + outputFile);
     }
 
-    private static void processFile(String filePath, int statusCol1, Integer statusCol2, int ruleNameCol, Set<String> failsCol1, Set<String> failsCol2) {
+    private static void processFile(String filePath, Integer osCol, Integer otCol, int[] osCols, int[] otCols, Map<String, String[]> osData, Map<String, String[]> otData) {
         try (FileInputStream fis = new FileInputStream(filePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
@@ -69,17 +77,33 @@ public class ExcelProcessor {
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header
 
-                String ruleName = getCellValue(row, ruleNameCol);
-                String status1 = getCellValue(row, statusCol1);
-
-                if ("FAIL".equalsIgnoreCase(status1) && ruleName != null && !ruleName.trim().isEmpty()) {
-                    failsCol1.add(ruleName.trim());
+                if (osCol != null && osCols != null) {
+                    String status = getCellValue(row, osCol);
+                    if ("FAIL".equalsIgnoreCase(status)) {
+                        String[] values = new String[osCols.length];
+                        for (int i = 0; i < osCols.length; i++) {
+                            values[i] = getCellValue(row, osCols[i]);
+                        }
+                        values[10] = "FAIL"; // Status column
+                        String ruleName = values[0];
+                        if (ruleName != null && !ruleName.trim().isEmpty()) {
+                            osData.put(ruleName.trim(), values);
+                        }
+                    }
                 }
 
-                if (statusCol2 != null) {
-                    String status2 = getCellValue(row, statusCol2);
-                    if ("FAIL".equalsIgnoreCase(status2) && ruleName != null && !ruleName.trim().isEmpty()) {
-                        failsCol2.add(ruleName.trim());
+                if (otCol != null && otCols != null) {
+                    String status = getCellValue(row, otCol);
+                    if ("FAIL".equalsIgnoreCase(status)) {
+                        String[] values = new String[otCols.length];
+                        for (int i = 0; i < otCols.length; i++) {
+                            values[i] = getCellValue(row, otCols[i]);
+                        }
+                        values[10] = "FAIL"; // Status column
+                        String ruleName = values[0];
+                        if (ruleName != null && !ruleName.trim().isEmpty()) {
+                            otData.put(ruleName.trim(), values);
+                        }
                     }
                 }
             }
@@ -98,18 +122,22 @@ public class ExcelProcessor {
         }
     }
 
-    private static void writeOutput(String outputFile, Set<String> failsCol1, Set<String> failsCol2) {
+    private static void writeOutput(String outputFile, Map<String, String[]> osData, Map<String, String[]> otData) {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
              FileOutputStream fos = new FileOutputStream(outputFile)) {
 
-            // Sheet 1: Open Search Issues
-            XSSFSheet sheet1 = workbook.createSheet("Open Search Issues");
-            writeSheet(sheet1, failsCol1, "RuleName", "Status");
+            String[] headers = {"Rule Name", "Raw Message", "Tag", "Source Input", "Target Input", "Target Column", "Watchlist", "N_UID", "Transaction Token", "Match Count", "Status", "Feedback Status", "Specific Count", "Feedback", "Comments"};
 
-            // Sheet 2: Oracle Text Issues (if applicable)
-            if (failsCol2 != null) {
+            // Sheet for Open Search Issues (if applicable)
+            if (osData != null && !osData.isEmpty()) {
+                XSSFSheet sheet1 = workbook.createSheet("Open Search Issues");
+                writeSheet(sheet1, osData, headers);
+            }
+
+            // Sheet for Oracle Text Issues (if applicable)
+            if (otData != null && !otData.isEmpty()) {
                 XSSFSheet sheet2 = workbook.createSheet("Oracle Text Issues");
-                writeSheet(sheet2, failsCol2, "RuleName", "Status");
+                writeSheet(sheet2, otData, headers);
             }
 
             workbook.write(fos);
@@ -118,22 +146,35 @@ public class ExcelProcessor {
         }
     }
 
-    private static void writeSheet(XSSFSheet sheet, Set<String> data, String header1, String header2) {
+    private static void writeSheet(XSSFSheet sheet, Map<String, String[]> data, String[] headers) {
         // Header
         XSSFRow headerRow = sheet.createRow(0);
-        headerRow.createCell(0).setCellValue(header1);
-        headerRow.createCell(1).setCellValue(header2);
+        for (int i = 0; i < headers.length; i++) {
+            headerRow.createCell(i).setCellValue(headers[i]);
+        }
 
         // Data
         int rowNum = 1;
-        for (String ruleName : data) {
+        for (String[] rowData : data.values()) {
             XSSFRow row = sheet.createRow(rowNum++);
-            row.createCell(0).setCellValue(ruleName);
-            row.createCell(1).setCellValue("FAIL");
+            for (int i = 0; i < rowData.length; i++) {
+                row.createCell(i).setCellValue(rowData[i] != null ? rowData[i] : "");
+            }
         }
 
         // Auto-size columns
-        sheet.autoSizeColumn(0);
-        sheet.autoSizeColumn(1);
+        for (int i = 0; i < headers.length; i++) {
+            sheet.autoSizeColumn(i);
+        }
+    }
+
+    private static int[] parseColumns(String colsStr) {
+        if (colsStr == null || colsStr.trim().isEmpty()) return null;
+        String[] parts = colsStr.split(",");
+        int[] cols = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            cols[i] = Integer.parseInt(parts[i].trim());
+        }
+        return cols;
     }
 }
