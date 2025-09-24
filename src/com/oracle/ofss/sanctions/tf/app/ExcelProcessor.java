@@ -80,11 +80,11 @@ public class ExcelProcessor {
                 if (osCol != null && osCols != null) {
                     String status = getCellValue(row, osCol);
                     if ("FAIL".equalsIgnoreCase(status)) {
-                        String[] values = new String[osCols.length];
+                        String[] values = new String[16];
                         for (int i = 0; i < osCols.length; i++) {
                             values[i] = getCellValue(row, osCols[i]);
                         }
-                        values[10] = "FAIL"; // Status column
+                        values[15] = "FAIL";
                         String ruleName = values[0];
                         if (ruleName != null && !ruleName.trim().isEmpty()) {
                             osData.put(ruleName.trim(), values);
@@ -95,11 +95,11 @@ public class ExcelProcessor {
                 if (otCol != null && otCols != null) {
                     String status = getCellValue(row, otCol);
                     if ("FAIL".equalsIgnoreCase(status)) {
-                        String[] values = new String[otCols.length];
+                        String[] values = new String[16];
                         for (int i = 0; i < otCols.length; i++) {
                             values[i] = getCellValue(row, otCols[i]);
                         }
-                        values[10] = "FAIL"; // Status column
+                        values[15] = "FAIL";
                         String ruleName = values[0];
                         if (ruleName != null && !ruleName.trim().isEmpty()) {
                             otData.put(ruleName.trim(), values);
@@ -126,7 +126,7 @@ public class ExcelProcessor {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
              FileOutputStream fos = new FileOutputStream(outputFile)) {
 
-            String[] headers = {"Rule Name", "Raw Message", "Tag", "Source Input", "Target Input", "Target Column", "Watchlist", "N_UID", "Transaction Token", "Match Count", "Status", "Feedback Status", "Specific Count", "Feedback", "Comments"};
+            String[] headers = {"Rule Name", "Raw Message", "Tag", "Source Input", "Target Input", "Target Column", "Watchlist", "N_UID", "Transaction Token", "Match Count", "Status", "Feedback Status", "Specific Count", "Feedback", "Comments", "Test Status"};
 
             // Sheet for Open Search Issues (if applicable)
             if (osData != null && !osData.isEmpty()) {
@@ -164,6 +164,7 @@ public class ExcelProcessor {
 
         // Auto-size columns
         for (int i = 0; i < headers.length; i++) {
+            if(i == 1 || i == 2 || i == 13) continue;
             sheet.autoSizeColumn(i);
         }
     }
