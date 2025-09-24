@@ -24,8 +24,8 @@ public class ExcelProcessor {
 
         String inputDir = config.getProperty("inputDirectory");
         String outputDir = config.getProperty("outputDirectory", inputDir);
-        int statusCol1 = Integer.parseInt(config.getProperty("statusColumn1"));
-        String statusCol2Str = config.getProperty("statusColumn2");
+        int statusCol1 = Integer.parseInt(config.getProperty("TestStatusOS.column"));
+        String statusCol2Str = config.getProperty("TestStatusOT.column");
         Integer statusCol2 = statusCol2Str != null ? Integer.parseInt(statusCol2Str) : null;
         int ruleNameCol = Integer.parseInt(config.getProperty("ruleNameColumn"));
 
@@ -102,13 +102,13 @@ public class ExcelProcessor {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
              FileOutputStream fos = new FileOutputStream(outputFile)) {
 
-            // Sheet 1: StatusColumn1
-            XSSFSheet sheet1 = workbook.createSheet("StatusColumn1");
+            // Sheet 1: Open Search Issues
+            XSSFSheet sheet1 = workbook.createSheet("Open Search Issues");
             writeSheet(sheet1, failsCol1, "RuleName", "Status");
 
-            // Sheet 2: StatusColumn2 (if applicable)
+            // Sheet 2: Oracle Text Issues (if applicable)
             if (failsCol2 != null) {
-                XSSFSheet sheet2 = workbook.createSheet("StatusColumn2");
+                XSSFSheet sheet2 = workbook.createSheet("Oracle Text Issues");
                 writeSheet(sheet2, failsCol2, "RuleName", "Status");
             }
 
