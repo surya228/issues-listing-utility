@@ -15,22 +15,21 @@ public class ExcelProcessor {
 
     public static void main(String[] args) {
         Properties config = new Properties();
-        try (FileInputStream fis = new FileInputStream("src/config.properties")) {
+        try (FileInputStream fis = new FileInputStream(Constants.CONFIG_FILE_PATH)) {
             config.load(fis);
         } catch (IOException e) {
             System.err.println("Error loading config.properties: " + e.getMessage());
             return;
         }
 
-        String inputDir = config.getProperty("inputDirectory");
-        String outputDir = config.getProperty("outputDirectory", inputDir);
-        String osColStr = config.getProperty("TestStatusOS.column");
-        String otColStr = config.getProperty("TestStatusOT.column");
+        String inputDir = config.getProperty(Constants.PROP_INPUT_DIR);
+        String outputDir = config.getProperty(Constants.PROP_OUTPUT_DIR, inputDir);
+        String osColStr = config.getProperty(Constants.PROP_OS_COL);
+        String otColStr = config.getProperty(Constants.PROP_OT_COL);
         Integer osCol = osColStr != null ? Integer.parseInt(osColStr) : null;
         Integer otCol = otColStr != null ? Integer.parseInt(otColStr) : null;
-        int[] osCols = parseColumns(config.getProperty("TestStatusOS.columns"));
-        int[] otCols = parseColumns(config.getProperty("TestStatusOT.columns"));
-        int ruleNameCol = Integer.parseInt(config.getProperty("ruleNameColumn"));
+        int[] osCols = parseColumns(Constants.PROP_OS_COLS);
+        int[] otCols = parseColumns(Constants.PROP_OT_COLS);
 
         if (osCol == null && otCol == null) {
             System.err.println("Error: At least one of TestStatusOS.column or TestStatusOT.column must be provided.");
@@ -60,9 +59,9 @@ public class ExcelProcessor {
         }
 
         // Generate output filename
-        SimpleDateFormat sdf = new SimpleDateFormat("ddMMyy_HHmmss");
+        SimpleDateFormat sdf = new SimpleDateFormat(Constants.DATE_FORMAT);
         String timestamp = sdf.format(new Date());
-        String outputFile = outputDir + File.separator + "Issues_" + timestamp + ".xlsx";
+        String outputFile = outputDir + File.separator + Constants.OUTPUT_PREFIX + timestamp + Constants.EXTENSION;
 
         // Write output
         writeOutput(outputFile, osData, otData);
@@ -79,12 +78,12 @@ public class ExcelProcessor {
 
                 if (osCol != null && osCols != null) {
                     String status = getCellValue(row, osCol);
-                    if ("FAIL".equalsIgnoreCase(status)) {
+                    if (Constants.FAIL_STATUS.equalsIgnoreCase(status)) {
                         String[] values = new String[16];
                         for (int i = 0; i < osCols.length; i++) {
                             values[i] = getCellValue(row, osCols[i]);
                         }
-                        values[15] = "FAIL";
+                        values[15] = Constants.FAIL_STATUS;
                         String ruleName = values[0];
                         if (ruleName != null && !ruleName.trim().isEmpty()) {
                             osData.put(ruleName.trim(), values);
@@ -94,12 +93,12 @@ public class ExcelProcessor {
 
                 if (otCol != null && otCols != null) {
                     String status = getCellValue(row, otCol);
-                    if ("FAIL".equalsIgnoreCase(status)) {
+                    if (Constants.FAIL_STATUS.equalsIgnoreCase(status)) {
                         String[] values = new String[16];
                         for (int i = 0; i < otCols.length; i++) {
                             values[i] = getCellValue(row, otCols[i]);
                         }
-                        values[15] = "FAIL";
+                        values[15] = Constants.FAIL_STATUS;
                         String ruleName = values[0];
                         if (ruleName != null && !ruleName.trim().isEmpty()) {
                             otData.put(ruleName.trim(), values);
@@ -126,18 +125,16 @@ public class ExcelProcessor {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
              FileOutputStream fos = new FileOutputStream(outputFile)) {
 
-            String[] headers = {"Rule Name", "Raw Message", "Tag", "Source Input", "Target Input", "Target Column", "Watchlist", "N_UID", "Transaction Token", "Match Count", "Status", "Feedback Status", "Specific Count", "Feedback", "Comments", "Test Status"};
-
             // Sheet for Open Search Issues (if applicable)
             if (osData != null && !osData.isEmpty()) {
-                XSSFSheet sheet1 = workbook.createSheet("Open Search Issues");
-                writeSheet(sheet1, osData, headers);
+                XSSFSheet sheet1 = workbook.createSheet(Constants.SHEET_OS);
+                writeSheet(sheet1, osData, Constants.HEADERS);
             }
 
             // Sheet for Oracle Text Issues (if applicable)
             if (otData != null && !otData.isEmpty()) {
-                XSSFSheet sheet2 = workbook.createSheet("Oracle Text Issues");
-                writeSheet(sheet2, otData, headers);
+                XSSFSheet sheet2 = workbook.createSheet(Constants.SHEET_OT);
+                writeSheet(sheet2, otData, Constants.HEADERS);
             }
 
             workbook.write(fos);
