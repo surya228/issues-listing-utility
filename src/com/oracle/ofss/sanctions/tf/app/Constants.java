@@ -19,13 +19,5 @@ public class Constants {
     public static final String PROP_OUTPUT_DIR = "outputDirectory";
     public static final String PROP_OS_COL = "TestStatusOS.column";
     public static final String PROP_OT_COL = "TestStatusOT.column";
-    public static final String PROP_OS_COLS = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,16";
-    public static final String PROP_OT_COLS = "1,2,3,4,5,6,7,8,17,18,19,20,21,22,24";
-    public static final String[] HEADERS = {
-        "Rule Name", "Raw Message", "Tag", "Source Input", "Target Input",
-        "Target Column", "Watchlist", "N_UID", "Transaction Token",
-        "Match Count", "Status", "Feedback Status", "Specific Match Count",
-        "Feedback", "Comments", "Test Status"
-    };
 
 }
