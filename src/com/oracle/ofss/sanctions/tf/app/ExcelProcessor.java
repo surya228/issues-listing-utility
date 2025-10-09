@@ -25,12 +25,6 @@ public class ExcelProcessor {
         String inputDir = config.getProperty(Constants.PROP_INPUT_DIR);
         String outputDir = config.getProperty(Constants.PROP_OUTPUT_DIR, inputDir);
 
-
-        if (osCol == null && otCol == null) {
-            System.err.println("Error: At least one of TestStatusOS.column or TestStatusOT.column must be provided.");
-            return;
-        }
-
         // Ensure output directory exists
         try {
             Files.createDirectories(Paths.get(outputDir));
