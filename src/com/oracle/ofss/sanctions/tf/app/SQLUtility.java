@@ -32,11 +32,11 @@ public class SQLUtility {
             config.addDataSourceProperty(Constants.TNS_ADMIN, tnsAdminPath);
 
             // Optimized connection pool settings for bulk operations
-            config.setMaximumPoolSize(20); // Increased for better throughput
-            config.setMinimumIdle(10);
-            config.setConnectionTimeout(900000000);
-            config.setIdleTimeout(900000000);
-            config.setMaxLifetime(1800000000);
+            config.setMaximumPoolSize(10);
+            config.setMinimumIdle(5);
+            config.setConnectionTimeout(300000); // 5 minutes
+            config.setIdleTimeout(600000); // 10 minutes
+            config.setMaxLifetime(1800000); // 30 minutes
             config.setLeakDetectionThreshold(60000);
 
             // Performance optimizations and timeout settings

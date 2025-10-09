@@ -11,6 +11,8 @@ import java.util.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.sql.*;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLRecoverableException;
 
 public class ExcelProcessor {
 
@@ -219,8 +221,12 @@ public class ExcelProcessor {
                     }
                 }
             }
+        } catch (SQLTimeoutException | SQLRecoverableException e) {
+            log.error("Database timeout/recoverable error in checker1: {}", e.getMessage());
+            return "NA";
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Unexpected error in checker1: {}", e.getMessage(), e);
+            return "NA";
         }
         return "No";
     }
@@ -250,19 +256,23 @@ public class ExcelProcessor {
         String targetCol = getCellValue(row, colIndices.get("Target Column"));
         String table = Constants.OT_TABLE_WL_MAP.get(watchlist);
         if (table == null) return "NA";
-        String query = "select count(*) from rt_candidates where n_run_skey = (select n_run_skey from fcc_mr_matched_result_rt where rownum=1 and n_request_id=?) and n_uid=? and V_WATCHLIST_TYPE = ? and " + targetCol + " is not null";
+        String query = "select count(*) from rt_candidates where n_run_skey = (select n_run_skey from fcc_mr_matched_result_rt where rownum=1 and n_request_id=?) and V_WATCHLIST_TYPE = ? and n_uid=? and " + targetCol + " is not null";
         try (PreparedStatement ps = conn.prepareStatement(query)) {
             ps.setString(1, requestId);
-            ps.setString(2, nUid);
-            ps.setString(3, table);
+            ps.setString(2, table);
+            ps.setString(3, nUid);
             log.info("Executing checker2 query: {} with params: requestId={}, nUid={}, table={}, targetCol={}", query, requestId, nUid, table, targetCol);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return rs.getInt(1) > 0 ? "Yes" : "No";
                 }
             }
+        } catch (SQLTimeoutException | SQLRecoverableException e) {
+            log.error("Database timeout/recoverable error in checker2: {}", e.getMessage());
+            return "NA";
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Unexpected error in checker2: {}", e.getMessage(), e);
+            return "NA";
         }
         return "No";
     }
