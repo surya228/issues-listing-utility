@@ -52,6 +52,7 @@ public class Constants {
     public static final String NA = "NA";
     public static final String INPUT_TO_MS = "Input to MS";
     public static final String CANDIDATES_PRESENT = "Candidates present";
+    public static final String COMMENT = "Comment";
 
     // Query Strings
     public static final String CHECKER1_QUERY = "select c_request_json from FCC_MR_MATCHED_RESULT_RT WHERE N_REQUEST_ID = ? and c_request_json like ?";
@@ -71,6 +72,13 @@ public class Constants {
     public static final String RULE_NARRATIVE_PORT = "\"ruleName\":\"Narrative Port";
     public static final String RULE_NARRATIVE_GOODS = "\"ruleName\":\"Narrative Goods";
     public static final String RULE_STOP_KEYWORDS = "\"ruleName\":\"Stop Keywords";
+
+
+
+    public static final String SCORING_ENGINE_ISSUE = "Scoring Engine Issue";
+    public static final String TF_ISSUE = "TF Issue";
+    public static final String MATCHING_ISSUE = "Matching Issue";
+    public static final String OT_ISSUE = "Oracle Text Issue";
 
     public static final Map<String, String> OT_TABLE_WL_MAP;
     static {

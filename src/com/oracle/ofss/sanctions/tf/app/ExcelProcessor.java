@@ -126,22 +126,24 @@ public class ExcelProcessor {
             // build headers if first file
             synchronized(headerLock) {
                 if (osHeaders.isEmpty()) {
-                    // OS headers: common + OS + "Input to MS"
-                    for (String col : allColumns) {
-                        if (!col.startsWith(Constants.OT_PREFIX)) {  // include common and OS
-                            osHeaders.add(col);
-                        }
+                // OS headers: common + OS + "Input to MS" + "Comment"
+                for (String col : allColumns) {
+                    if (!col.startsWith(Constants.OT_PREFIX)) {  // include common and OS
+                        osHeaders.add(col);
                     }
-                    osHeaders.add(Constants.INPUT_TO_MS);
+                }
+                osHeaders.add(Constants.INPUT_TO_MS);
+                osHeaders.add(Constants.COMMENT);
 
-                    // OT headers: common + OT + "Input to MS" + "Candidates present"
-                    for (String col : allColumns) {
-                        if (!col.startsWith(Constants.OS_PREFIX)) {  // include common and OT
-                            otHeaders.add(col);
-                        }
+                // OT headers: common + OT + "Input to MS" + "Candidates present" + "Comment"
+                for (String col : allColumns) {
+                    if (!col.startsWith(Constants.OS_PREFIX)) {  // include common and OT
+                        otHeaders.add(col);
                     }
-                    otHeaders.add(Constants.INPUT_TO_MS);
-                    otHeaders.add(Constants.CANDIDATES_PRESENT);
+                }
+                otHeaders.add(Constants.INPUT_TO_MS);
+                otHeaders.add(Constants.CANDIDATES_PRESENT);
+                otHeaders.add(Constants.COMMENT);
                 }
             }
 
@@ -214,6 +216,9 @@ public class ExcelProcessor {
             for (String header : osHeaders) {
                 if (Constants.INPUT_TO_MS.equals(header)) {
                     rowData.add(inputToMs);
+                } else if (Constants.COMMENT.equals(header)) {
+                    String comment = Constants.NO.equals(inputToMs) ? Constants.TF_ISSUE : Constants.MATCHING_ISSUE;
+                    rowData.add(comment);
                 } else {
                     rowData.add(getCellValue(row, colIndices.get(header)));
                 }
@@ -235,6 +240,16 @@ public class ExcelProcessor {
                     rowData.add(inputToMs);
                 } else if (Constants.CANDIDATES_PRESENT.equals(header)) {
                     rowData.add(candidates);
+                } else if (Constants.COMMENT.equals(header)) {
+                    String comment;
+                    if (Constants.YES.equals(candidates)) {
+                        comment = Constants.SCORING_ENGINE_ISSUE;
+                    } else if (Constants.NO.equals(candidates)) {
+                        comment = Constants.OT_ISSUE;
+                    } else {
+                        comment = Constants.TF_ISSUE;
+                    }
+                    rowData.add(comment);
                 } else {
                     rowData.add(getCellValue(row, colIndices.get(header)));
                 }
