@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.sql.*;
@@ -21,7 +22,7 @@ public class ExcelProcessor {
     static List<String> otHeaders;
     static List<List<Object>> osData;
     static List<List<Object>> otData;
-    static Connection conn;
+    static int threadPoolSize;
 
     public static void main(String[] args) throws Exception {
         Properties config = new Properties();
@@ -34,6 +35,7 @@ public class ExcelProcessor {
 
         String inputDir = config.getProperty(Constants.PROP_INPUT_DIR);
         String outputDir = config.getProperty(Constants.PROP_OUTPUT_DIR, inputDir);
+        threadPoolSize = Integer.parseInt(config.getProperty(Constants.PROP_THREAD_POOL_SIZE, "4"));
 
         // Ensure output directory exists
         try {
@@ -49,8 +51,6 @@ public class ExcelProcessor {
         otHeaders = new ArrayList<>();
         osData = new ArrayList<>();
         otData = new ArrayList<>();
-
-        conn = SQLUtility.getDbConnection();
 
         // Process input files
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(inputDir), "*.xlsx")) {
@@ -75,13 +75,6 @@ public class ExcelProcessor {
         // Write output
         writeOutput(outputFile);
         System.out.println("Output written to: " + outputFile);
-
-        // close db
-        try {
-            if (conn != null) conn.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     static void processFile(Path filePath) {
@@ -119,52 +112,27 @@ public class ExcelProcessor {
                 otHeaders.add("Candidates present");
             }
 
+            List<List<Object>> localOsData = Collections.synchronizedList(new ArrayList<>());
+            List<List<Object>> localOtData = Collections.synchronizedList(new ArrayList<>());
+            ExecutorService executor = Executors.newFixedThreadPool(threadPoolSize);
+            List<Future<Void>> futures = new ArrayList<>();
             for (int r = 1; r <= sheet.getLastRowNum(); r++) {
-                Row row = sheet.getRow(r);
-                if (row == null) continue;
-                String osStatus = getCellValue(row, colIndices.get("OS Test Status"));
-                String otStatus = getCellValue(row, colIndices.get("OT Test Status"));
-                boolean isOsFail = "FAIL".equals(osStatus);
-                boolean isOtFail = "FAIL".equals(otStatus);
-                if (!isOsFail && !isOtFail) continue;
-
-                // compute requestId
-                String requestId = null;
-                if (isOsFail) {
-                    requestId = computeRequestId(row, colIndices, "OS");
-                } else {
-                    requestId = computeRequestId(row, colIndices, "OT");
-                }
-
-                if (isOsFail) {
-                    String inputToMs = checker1(requestId, row, colIndices, "OS");
-                    List<Object> rowData = new ArrayList<>();
-                    for (String header : osHeaders) {
-                        if ("Input to MS".equals(header)) {
-                            rowData.add(inputToMs);
-                        } else {
-                            rowData.add(getCellValue(row, colIndices.get(header)));
-                        }
+                final int rowNum = r;
+                futures.add(executor.submit(() -> {
+                    try {
+                        processRow(rowNum, sheet, colIndices, localOsData, localOtData);
+                    } catch (Exception e) {
+                        log.error("Error processing row " + rowNum + ": " + e.getMessage());
                     }
-                    osData.add(rowData);
-                }
-
-                if (isOtFail) {
-                    String inputToMs = checker1(requestId, row, colIndices, "OT");
-                    String candidates = checker2(requestId, row, colIndices);
-                    List<Object> rowData = new ArrayList<>();
-                    for (String header : otHeaders) {
-                        if ("Input to MS".equals(header)) {
-                            rowData.add(inputToMs);
-                        } else if ("Candidates present".equals(header)) {
-                            rowData.add(candidates);
-                        } else {
-                            rowData.add(getCellValue(row, colIndices.get(header)));
-                        }
-                    }
-                    otData.add(rowData);
-                }
+                    return null;
+                }));
             }
+            for (Future<Void> f : futures) {
+                f.get();
+            }
+            executor.shutdown();
+            osData.addAll(localOsData);
+            otData.addAll(localOtData);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -190,6 +158,73 @@ public class ExcelProcessor {
         return transactionToken + suffix;
     }
 
+    static void processRow(int r, Sheet sheet, Map<String, Integer> colIndices, List<List<Object>> localOsData, List<List<Object>> localOtData) {
+        Row row = sheet.getRow(r);
+        if (row == null) return;
+        String osStatus = getCellValue(row, colIndices.get("OS Test Status"));
+        String otStatus = getCellValue(row, colIndices.get("OT Test Status"));
+        boolean isOsFail = "FAIL".equals(osStatus);
+        boolean isOtFail = "FAIL".equals(otStatus);
+        if (!isOsFail && !isOtFail) return;
+
+        // compute requestId
+        String requestId = null;
+        if (isOsFail) {
+            requestId = computeRequestId(row, colIndices, "OS");
+        } else {
+            requestId = computeRequestId(row, colIndices, "OT");
+        }
+
+        if (isOsFail) {
+            String inputToMs = checker1(requestId, row, colIndices, "OS");
+            List<Object> rowData = new ArrayList<>();
+            for (String header : osHeaders) {
+                if ("Input to MS".equals(header)) {
+                    rowData.add(inputToMs);
+                } else {
+                    rowData.add(getCellValue(row, colIndices.get(header)));
+                }
+            }
+            localOsData.add(rowData);
+        }
+
+        if (isOtFail) {
+            String inputToMs;
+            try {
+                String finalRequestId = requestId;
+                CompletableFuture<String> inputToMsFuture = CompletableFuture.<String>supplyAsync(() -> checker1(finalRequestId, row, colIndices, "OT"));
+                inputToMs = inputToMsFuture.get();
+            } catch (InterruptedException | ExecutionException e) {
+                log.error("Error in async checker1 for OT: {}", e.getMessage());
+                inputToMs = "NA";
+            }
+            String candidates;
+            if ("No".equals(inputToMs)) {
+                candidates = "NA";
+            } else {
+                try {
+                    String finalRequestId1 = requestId;
+                    CompletableFuture<String> candidatesFuture = CompletableFuture.<String>supplyAsync(() -> checker2(finalRequestId1, row, colIndices));
+                    candidates = candidatesFuture.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Error in async checker2: {}", e.getMessage());
+                    candidates = "NA";
+                }
+            }
+            List<Object> rowData = new ArrayList<>();
+            for (String header : otHeaders) {
+                if ("Input to MS".equals(header)) {
+                    rowData.add(inputToMs);
+                } else if ("Candidates present".equals(header)) {
+                    rowData.add(candidates);
+                } else {
+                    rowData.add(getCellValue(row, colIndices.get(header)));
+                }
+            }
+            localOtData.add(rowData);
+        }
+    }
+
     static String checker1(String requestId, Row row, Map<String, Integer> colIndices, String type) {
         // find webservice
         String webservice = null;
@@ -209,7 +244,8 @@ public class ExcelProcessor {
         String searchText = getSearchText(webservice);
         String sourceInput = getCellValue(row, colIndices.get("Source Input"));
         String query = "select c_request_json from FCC_MR_MATCHED_RESULT_RT WHERE N_REQUEST_ID = ? and c_request_json like ?";
-        try (PreparedStatement ps = conn.prepareStatement(query)) {
+        try (Connection conn = SQLUtility.getDbConnection();
+             PreparedStatement ps = conn.prepareStatement(query)) {
             ps.setString(1, requestId);
             ps.setString(2, "%" + searchText + "%");
             log.info("Executing checker1 query: {} with params: requestId={}, likePattern={}", query, requestId, "%" + searchText + "%");
@@ -257,7 +293,8 @@ public class ExcelProcessor {
         String table = Constants.OT_TABLE_WL_MAP.get(watchlist);
         if (table == null) return "NA";
         String query = "select count(*) from rt_candidates where n_run_skey = (select n_run_skey from fcc_mr_matched_result_rt where rownum=1 and n_request_id=?) and V_WATCHLIST_TYPE = ? and n_uid=? and " + targetCol + " is not null";
-        try (PreparedStatement ps = conn.prepareStatement(query)) {
+        try (Connection conn = SQLUtility.getDbConnection();
+             PreparedStatement ps = conn.prepareStatement(query)) {
             ps.setString(1, requestId);
             ps.setString(2, table);
             ps.setString(3, nUid);

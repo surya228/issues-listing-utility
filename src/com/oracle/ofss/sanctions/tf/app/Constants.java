@@ -20,6 +20,7 @@ public class Constants {
     public static final String EXTENSION = ".xlsx";
     public static final String PROP_INPUT_DIR = "inputDirectory";
     public static final String PROP_OUTPUT_DIR = "outputDirectory";
+    public static final String PROP_THREAD_POOL_SIZE = "threads";
     public static final String JDBC_DRIVER = "jdbcdriver";
     public static final String JDBC_URL = "jdbcurl";
     public static final String WALLET_NAME = "walletName";
