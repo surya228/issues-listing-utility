@@ -39,7 +39,7 @@ public class Constants {
     public static final String OS_PREFIX = "OS ";
     public static final String OT_PREFIX = "OT ";
     public static final String MESSAGE_PREFIX = "Message ";
-    public static final String WEBSERVICE_PREFIX = "# ";
+    public static final String WEBSERVICE_PREFIX = " # ";
     public static final String MATCHES_SUFFIX = " matches";
     public static final String TRANSACTION_TOKEN_SUFFIX = " Transaction Token";
 

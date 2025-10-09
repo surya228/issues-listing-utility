@@ -201,27 +201,12 @@ public class ExcelProcessor {
         }
 
         if (isOtFail) {
-            String inputToMs;
-            try {
-                String finalRequestId = requestId;
-                CompletableFuture<String> inputToMsFuture = CompletableFuture.<String>supplyAsync(() -> checker1(finalRequestId, row, colIndices, "OT"));
-                inputToMs = inputToMsFuture.get();
-            } catch (InterruptedException | ExecutionException e) {
-                log.error("Error in async checker1 for OT: {}", e.getMessage());
-                inputToMs = Constants.NA;
-            }
+            String inputToMs = checker1(requestId, row, colIndices, "OT");
             String candidates;
-            if (Constants.NO.equals(inputToMs)) {
-                candidates = Constants.NA;
+            if (Constants.YES.equals(inputToMs)) {
+                candidates = checker2(requestId, row, colIndices);
             } else {
-                try {
-                    String finalRequestId1 = requestId;
-                    CompletableFuture<String> candidatesFuture = CompletableFuture.<String>supplyAsync(() -> checker2(finalRequestId1, row, colIndices));
-                    candidates = candidatesFuture.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    log.error("Error in async checker2: {}", e.getMessage());
-                    candidates = Constants.NA;
-                }
+                candidates = Constants.NA;
             }
             List<Object> rowData = new ArrayList<>();
             for (String header : otHeaders) {
