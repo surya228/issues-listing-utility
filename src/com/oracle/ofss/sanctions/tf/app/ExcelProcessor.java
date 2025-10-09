@@ -2,8 +2,6 @@ package com.oracle.ofss.sanctions.tf.app;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -178,7 +176,7 @@ public class ExcelProcessor {
             if (col.startsWith("Message ")) {
                 String val = getCellValue(row, colIndices.get(col));
                 if (val != null && !val.isEmpty()) {
-                    messageType = col.substring(("Message ").length());
+                    messageType = col.substring(("Message ").length()).trim();
                     break;
                 }
             }
@@ -193,11 +191,13 @@ public class ExcelProcessor {
     static String checker1(String requestId, Row row, Map<String, Integer> colIndices, String type) {
         // find webservice
         String webservice = null;
+        String prefix = type + " # ";
+        String suffix = " matches";
         for (String col : colIndices.keySet()) {
-            if (col.startsWith(type + " # ")) {
+            if (col.startsWith(prefix) && col.endsWith(suffix)) {
                 String val = getCellValue(row, colIndices.get(col));
                 if (val != null && !val.isEmpty()) {
-                    webservice = col.substring((type + " # ").length());
+                    webservice = col.substring(prefix.length(), col.length() - suffix.length());
                     break;
                 }
             }
@@ -227,28 +227,28 @@ public class ExcelProcessor {
 
     static String getSearchText(String webservice) {
         switch (webservice) {
-            case "NameAndAddress": return "\"ruleName\":\"Full Name And Address\"";
-            case "Identifier": return "\"ruleName\":\"Identifier\"";
-            case "City": return "\"ruleName\":\"City Name\"";
-            case "Country": return "\"ruleName\":\"Country Name\"";
-            case "Port": return "\"ruleName\":\"Port Name\"";
-            case "Goods": return "\"ruleName\":\"Goods Name\"";
-            case "Narrative NameAndAddress": return "\"ruleName\":\"Narrative Full Name\"";
-            case "Narrative Identifier": return "\"ruleName\":\"Narrative Identifier\"";
-            case "Narrative City": return "\"ruleName\":\"Narrative City\"";
-            case "Narrative Country": return "\"ruleName\":\"Narrative Country\"";
-            case "Narrative Port": return "\"ruleName\":\"Narrative Port\"";
-            case "Narrative Goods": return "\"ruleName\":\"Narrative Goods\"";
-            case "Stopkeywords": return "\"ruleName\":\"Stop Keywords\"";
+            case "NameAndAddress": return "\"ruleName\":\"Full Name And Address";
+            case "Identifier": return "\"ruleName\":\"Identifier";
+            case "City": return "\"ruleName\":\"City Name";
+            case "Country": return "\"ruleName\":\"Country Name";
+            case "Port": return "\"ruleName\":\"Port Name";
+            case "Goods": return "\"ruleName\":\"Goods Name";
+            case "Narrative NameAndAddress": return "\"ruleName\":\"Narrative Full Name";
+            case "Narrative Identifier": return "\"ruleName\":\"Narrative Identifier";
+            case "Narrative City": return "\"ruleName\":\"Narrative City";
+            case "Narrative Country": return "\"ruleName\":\"Narrative Country";
+            case "Narrative Port": return "\"ruleName\":\"Narrative Port";
+            case "Narrative Goods": return "\"ruleName\":\"Narrative Goods";
+            case "Stopkeywords": return "\"ruleName\":\"Stop Keywords";
             default: return "";
         }
     }
 
     static String checker2(String requestId, Row row, Map<String, Integer> colIndices) {
         String nUid = getCellValue(row, colIndices.get("N_UID"));
-        String watchlist = getCellValue(row, colIndices.get("Watchlist value"));
+        String watchlist = getCellValue(row, colIndices.get("Watchlist"));
         String targetCol = getCellValue(row, colIndices.get("Target Column"));
-        String table = Constants.TABLE_WL_MAP.get(watchlist);
+        String table = Constants.OT_TABLE_WL_MAP.get(watchlist);
         if (table == null) return "NA";
         String query = "select count(*) from rt_candidates where n_run_skey = (select n_run_skey from fcc_mr_matched_result_rt where rownum=1 and n_request_id=?) and n_uid=? and V_WATCHLIST_TYPE = ? and " + targetCol + " is not null";
         try (PreparedStatement ps = conn.prepareStatement(query)) {
