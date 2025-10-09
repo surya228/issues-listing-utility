@@ -23,6 +23,7 @@ public class ExcelProcessor {
     static List<List<Object>> osData;
     static List<List<Object>> otData;
     static int threadPoolSize;
+    static Object headerLock = new Object();
 
     public static void main(String[] args) throws Exception {
         log.info("=============================================================");
@@ -55,23 +56,41 @@ public class ExcelProcessor {
         // init
         osHeaders = new ArrayList<>();
         otHeaders = new ArrayList<>();
-        osData = new ArrayList<>();
-        otData = new ArrayList<>();
+        osData = Collections.synchronizedList(new ArrayList<>());
+        otData = Collections.synchronizedList(new ArrayList<>());
 
-        // Process input files
+        // Collect input files
+        List<Path> files = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(inputDir), "*.xlsx")) {
             for (Path filePath : stream) {
-                try {
-                    processFile(filePath);
-                } catch (Exception e) {
-                    System.err.println("Error processing file " + filePath + ": " + e.getMessage());
-                    // Continue with next file
-                }
+                files.add(filePath);
             }
         } catch (IOException e) {
             System.err.println("Error processing input directory: " + e.getMessage());
             return;
         }
+
+        // Process input files concurrently
+        ExecutorService fileExecutor = Executors.newFixedThreadPool(threadPoolSize);
+        List<Future<Void>> fileFutures = new ArrayList<>();
+        for (Path filePath : files) {
+            fileFutures.add(fileExecutor.submit(() -> {
+                try {
+                    processFile(filePath);
+                } catch (Exception e) {
+                    System.err.println("Error processing file " + filePath + ": " + e.getMessage());
+                }
+                return null;
+            }));
+        }
+        for (Future<Void> f : fileFutures) {
+            try {
+                f.get();
+            } catch (Exception e) {
+                log.error("Error in file processing future: {}", e.getMessage());
+            }
+        }
+        fileExecutor.shutdown();
 
         // Generate output filename
         SimpleDateFormat sdf = new SimpleDateFormat(Constants.DATE_FORMAT);
@@ -105,23 +124,25 @@ public class ExcelProcessor {
             }
 
             // build headers if first file
-            if (osHeaders.isEmpty()) {
-                // OS headers: common + OS + "Input to MS"
-                for (String col : allColumns) {
-                    if (!col.startsWith(Constants.OT_PREFIX)) {  // include common and OS
-                        osHeaders.add(col);
+            synchronized(headerLock) {
+                if (osHeaders.isEmpty()) {
+                    // OS headers: common + OS + "Input to MS"
+                    for (String col : allColumns) {
+                        if (!col.startsWith(Constants.OT_PREFIX)) {  // include common and OS
+                            osHeaders.add(col);
+                        }
                     }
-                }
-                osHeaders.add(Constants.INPUT_TO_MS);
+                    osHeaders.add(Constants.INPUT_TO_MS);
 
-                // OT headers: common + OT + "Input to MS" + "Candidates present"
-                for (String col : allColumns) {
-                    if (!col.startsWith(Constants.OS_PREFIX)) {  // include common and OT
-                        otHeaders.add(col);
+                    // OT headers: common + OT + "Input to MS" + "Candidates present"
+                    for (String col : allColumns) {
+                        if (!col.startsWith(Constants.OS_PREFIX)) {  // include common and OT
+                            otHeaders.add(col);
+                        }
                     }
+                    otHeaders.add(Constants.INPUT_TO_MS);
+                    otHeaders.add(Constants.CANDIDATES_PRESENT);
                 }
-                otHeaders.add(Constants.INPUT_TO_MS);
-                otHeaders.add(Constants.CANDIDATES_PRESENT);
             }
 
             List<List<Object>> localOsData = Collections.synchronizedList(new ArrayList<>());
