@@ -25,6 +25,12 @@ public class ExcelProcessor {
     static int threadPoolSize;
 
     public static void main(String[] args) throws Exception {
+        log.info("=============================================================");
+        log.info("               ISSUES LISTING UTILITY STARTED                ");
+        log.info("=============================================================");
+
+        Date startTimestamp = new Date();
+        long executionStartMillis = System.currentTimeMillis();
         Properties config = new Properties();
         try (FileInputStream fis = new FileInputStream(Constants.CONFIG_FILE_PATH)) {
             config.load(fis);
@@ -75,6 +81,12 @@ public class ExcelProcessor {
         // Write output
         writeOutput(outputFile);
         System.out.println("Output written to: " + outputFile);
+
+        log.info("=============================================================");
+        log.info("              ISSUES LISTING UTILITY COMPLETED               ");
+        log.info("=============================================================");
+        long executionEndMillis = System.currentTimeMillis();
+        log.info("Total time taken by utility: {} seconds", (executionEndMillis - executionStartMillis) / 1000L);
     }
 
     static void processFile(Path filePath) {
@@ -96,20 +108,20 @@ public class ExcelProcessor {
             if (osHeaders.isEmpty()) {
                 // OS headers: common + OS + "Input to MS"
                 for (String col : allColumns) {
-                    if (!col.startsWith("OT ")) {  // include common and OS
+                    if (!col.startsWith(Constants.OT_PREFIX)) {  // include common and OS
                         osHeaders.add(col);
                     }
                 }
-                osHeaders.add("Input to MS");
+                osHeaders.add(Constants.INPUT_TO_MS);
 
                 // OT headers: common + OT + "Input to MS" + "Candidates present"
                 for (String col : allColumns) {
-                    if (!col.startsWith("OS ")) {  // include common and OT
+                    if (!col.startsWith(Constants.OS_PREFIX)) {  // include common and OT
                         otHeaders.add(col);
                     }
                 }
-                otHeaders.add("Input to MS");
-                otHeaders.add("Candidates present");
+                otHeaders.add(Constants.INPUT_TO_MS);
+                otHeaders.add(Constants.CANDIDATES_PRESENT);
             }
 
             List<List<Object>> localOsData = Collections.synchronizedList(new ArrayList<>());
@@ -139,32 +151,32 @@ public class ExcelProcessor {
     }
 
     static String computeRequestId(Row row, Map<String, Integer> colIndices, String type) {
-        String transactionToken = getCellValue(row, colIndices.get(type + " Transaction Token"));
+        String transactionToken = getCellValue(row, colIndices.get(type + Constants.TRANSACTION_TOKEN_SUFFIX));
         String messageType = "";
 
         for (String col : colIndices.keySet()) {
-            if (col.startsWith("Message ")) {
+            if (col.startsWith(Constants.MESSAGE_PREFIX)) {
                 String val = getCellValue(row, colIndices.get(col));
                 if (val != null && !val.isEmpty()) {
-                    messageType = col.substring(("Message ").length()).trim();
+                    messageType = col.substring((Constants.MESSAGE_PREFIX).length()).trim();
                     break;
                 }
             }
         }
         int suffix = 0;
-        if ("SWIFT".equals(messageType)) suffix = 1;
-        else if ("FEDWIRE".equals(messageType)) suffix = 2;
-        else if ("ISO20022".equals(messageType)) suffix = 3;
+        if (Constants.SWIFT.equals(messageType)) suffix = 1;
+        else if (Constants.FEDWIRE.equals(messageType)) suffix = 2;
+        else if (Constants.ISO20022.equals(messageType)) suffix = 3;
         return transactionToken + suffix;
     }
 
     static void processRow(int r, Sheet sheet, Map<String, Integer> colIndices, List<List<Object>> localOsData, List<List<Object>> localOtData) {
         Row row = sheet.getRow(r);
         if (row == null) return;
-        String osStatus = getCellValue(row, colIndices.get("OS Test Status"));
-        String otStatus = getCellValue(row, colIndices.get("OT Test Status"));
-        boolean isOsFail = "FAIL".equals(osStatus);
-        boolean isOtFail = "FAIL".equals(otStatus);
+        String osStatus = getCellValue(row, colIndices.get(Constants.OS_TEST_STATUS));
+        String otStatus = getCellValue(row, colIndices.get(Constants.OT_TEST_STATUS));
+        boolean isOsFail = Constants.FAIL_STATUS.equals(osStatus);
+        boolean isOtFail = Constants.FAIL_STATUS.equals(otStatus);
         if (!isOsFail && !isOtFail) return;
 
         // compute requestId
@@ -179,7 +191,7 @@ public class ExcelProcessor {
             String inputToMs = checker1(requestId, row, colIndices, "OS");
             List<Object> rowData = new ArrayList<>();
             for (String header : osHeaders) {
-                if ("Input to MS".equals(header)) {
+                if (Constants.INPUT_TO_MS.equals(header)) {
                     rowData.add(inputToMs);
                 } else {
                     rowData.add(getCellValue(row, colIndices.get(header)));
@@ -196,11 +208,11 @@ public class ExcelProcessor {
                 inputToMs = inputToMsFuture.get();
             } catch (InterruptedException | ExecutionException e) {
                 log.error("Error in async checker1 for OT: {}", e.getMessage());
-                inputToMs = "NA";
+                inputToMs = Constants.NA;
             }
             String candidates;
-            if ("No".equals(inputToMs)) {
-                candidates = "NA";
+            if (Constants.NO.equals(inputToMs)) {
+                candidates = Constants.NA;
             } else {
                 try {
                     String finalRequestId1 = requestId;
@@ -208,14 +220,14 @@ public class ExcelProcessor {
                     candidates = candidatesFuture.get();
                 } catch (InterruptedException | ExecutionException e) {
                     log.error("Error in async checker2: {}", e.getMessage());
-                    candidates = "NA";
+                    candidates = Constants.NA;
                 }
             }
             List<Object> rowData = new ArrayList<>();
             for (String header : otHeaders) {
-                if ("Input to MS".equals(header)) {
+                if (Constants.INPUT_TO_MS.equals(header)) {
                     rowData.add(inputToMs);
-                } else if ("Candidates present".equals(header)) {
+                } else if (Constants.CANDIDATES_PRESENT.equals(header)) {
                     rowData.add(candidates);
                 } else {
                     rowData.add(getCellValue(row, colIndices.get(header)));
@@ -228,8 +240,8 @@ public class ExcelProcessor {
     static String checker1(String requestId, Row row, Map<String, Integer> colIndices, String type) {
         // find webservice
         String webservice = null;
-        String prefix = type + " # ";
-        String suffix = " matches";
+        String prefix = type + Constants.WEBSERVICE_PREFIX;
+        String suffix = Constants.MATCHES_SUFFIX;
         for (String col : colIndices.keySet()) {
             if (col.startsWith(prefix) && col.endsWith(suffix)) {
                 String val = getCellValue(row, colIndices.get(col));
@@ -239,11 +251,11 @@ public class ExcelProcessor {
                 }
             }
         }
-        if (webservice == null) return "NA";
+        if (webservice == null) return Constants.NA;
 
         String searchText = getSearchText(webservice);
-        String sourceInput = getCellValue(row, colIndices.get("Source Input"));
-        String query = "select c_request_json from FCC_MR_MATCHED_RESULT_RT WHERE N_REQUEST_ID = ? and c_request_json like ?";
+        String sourceInput = getCellValue(row, colIndices.get(Constants.SOURCE_INPUT));
+        String query = Constants.CHECKER1_QUERY;
         try (Connection conn = SQLUtility.getDbConnection();
              PreparedStatement ps = conn.prepareStatement(query)) {
             ps.setString(1, requestId);
@@ -253,46 +265,46 @@ public class ExcelProcessor {
                 if (rs.next()) {
                     String json = rs.getString(1);
                     if (json != null && json.contains(sourceInput)) {
-                        return "Yes";
+                        return Constants.YES;
                     }
                 }
             }
         } catch (SQLTimeoutException | SQLRecoverableException e) {
             log.error("Database timeout/recoverable error in checker1: {}", e.getMessage());
-            return "NA";
+            return Constants.NA;
         } catch (Exception e) {
             log.error("Unexpected error in checker1: {}", e.getMessage(), e);
-            return "NA";
+            return Constants.NA;
         }
-        return "No";
+        return Constants.NO;
     }
 
     static String getSearchText(String webservice) {
         switch (webservice) {
-            case "NameAndAddress": return "\"ruleName\":\"Full Name And Address";
-            case "Identifier": return "\"ruleName\":\"Identifier";
-            case "City": return "\"ruleName\":\"City Name";
-            case "Country": return "\"ruleName\":\"Country Name";
-            case "Port": return "\"ruleName\":\"Port Name";
-            case "Goods": return "\"ruleName\":\"Goods Name";
-            case "Narrative NameAndAddress": return "\"ruleName\":\"Narrative Full Name";
-            case "Narrative Identifier": return "\"ruleName\":\"Narrative Identifier";
-            case "Narrative City": return "\"ruleName\":\"Narrative City";
-            case "Narrative Country": return "\"ruleName\":\"Narrative Country";
-            case "Narrative Port": return "\"ruleName\":\"Narrative Port";
-            case "Narrative Goods": return "\"ruleName\":\"Narrative Goods";
-            case "Stopkeywords": return "\"ruleName\":\"Stop Keywords";
+            case "NameAndAddress": return Constants.RULE_FULL_NAME_AND_ADDRESS;
+            case "Identifier": return Constants.RULE_IDENTIFIER;
+            case "City": return Constants.RULE_CITY_NAME;
+            case "Country": return Constants.RULE_COUNTRY_NAME;
+            case "Port": return Constants.RULE_PORT_NAME;
+            case "Goods": return Constants.RULE_GOODS_NAME;
+            case "Narrative NameAndAddress": return Constants.RULE_NARRATIVE_FULL_NAME;
+            case "Narrative Identifier": return Constants.RULE_NARRATIVE_IDENTIFIER;
+            case "Narrative City": return Constants.RULE_NARRATIVE_CITY;
+            case "Narrative Country": return Constants.RULE_NARRATIVE_COUNTRY;
+            case "Narrative Port": return Constants.RULE_NARRATIVE_PORT;
+            case "Narrative Goods": return Constants.RULE_NARRATIVE_GOODS;
+            case "Stopkeywords": return Constants.RULE_STOP_KEYWORDS;
             default: return "";
         }
     }
 
     static String checker2(String requestId, Row row, Map<String, Integer> colIndices) {
-        String nUid = getCellValue(row, colIndices.get("N_UID"));
-        String watchlist = getCellValue(row, colIndices.get("Watchlist"));
-        String targetCol = getCellValue(row, colIndices.get("Target Column"));
+        String nUid = getCellValue(row, colIndices.get(Constants.N_UID));
+        String watchlist = getCellValue(row, colIndices.get(Constants.WATCHLIST));
+        String targetCol = getCellValue(row, colIndices.get(Constants.TARGET_COLUMN));
         String table = Constants.OT_TABLE_WL_MAP.get(watchlist);
-        if (table == null) return "NA";
-        String query = "select count(*) from rt_candidates where n_run_skey = (select n_run_skey from fcc_mr_matched_result_rt where rownum=1 and n_request_id=?) and V_WATCHLIST_TYPE = ? and n_uid=? and " + targetCol + " is not null";
+        if (table == null) return Constants.NA;
+        String query = Constants.CHECKER2_QUERY_PREFIX + targetCol + " is not null";
         try (Connection conn = SQLUtility.getDbConnection();
              PreparedStatement ps = conn.prepareStatement(query)) {
             ps.setString(1, requestId);
@@ -301,17 +313,17 @@ public class ExcelProcessor {
             log.info("Executing checker2 query: {} with params: requestId={}, nUid={}, table={}, targetCol={}", query, requestId, nUid, table, targetCol);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    return rs.getInt(1) > 0 ? "Yes" : "No";
+                    return rs.getInt(1) > 0 ? Constants.YES : Constants.NO;
                 }
             }
         } catch (SQLTimeoutException | SQLRecoverableException e) {
             log.error("Database timeout/recoverable error in checker2: {}", e.getMessage());
-            return "NA";
+            return Constants.NA;
         } catch (Exception e) {
             log.error("Unexpected error in checker2: {}", e.getMessage(), e);
-            return "NA";
+            return Constants.NA;
         }
-        return "No";
+        return Constants.NO;
     }
 
     static String getCellValue(Row row, Integer colIndex) {

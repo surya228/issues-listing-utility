@@ -27,6 +27,51 @@ public class Constants {
     public static final String TNS_ADMIN = "oracle.net.tns_admin";
     public static final String CONNECTION_ESTABLISHED = "Database connection established successfully";
 
+    // Excel Column Names
+    public static final String OS_TEST_STATUS = "OS Test Status";
+    public static final String OT_TEST_STATUS = "OT Test Status";
+    public static final String SOURCE_INPUT = "Source Input";
+    public static final String N_UID = "N_UID";
+    public static final String WATCHLIST = "Watchlist";
+    public static final String TARGET_COLUMN = "Target Column";
+
+    // Prefixes and Suffixes
+    public static final String OS_PREFIX = "OS ";
+    public static final String OT_PREFIX = "OT ";
+    public static final String MESSAGE_PREFIX = "Message ";
+    public static final String WEBSERVICE_PREFIX = "# ";
+    public static final String MATCHES_SUFFIX = " matches";
+    public static final String TRANSACTION_TOKEN_SUFFIX = " Transaction Token";
+
+    // Status Values
+    public static final String SWIFT = "SWIFT";
+    public static final String FEDWIRE = "FEDWIRE";
+    public static final String ISO20022 = "ISO20022";
+    public static final String YES = "Yes";
+    public static final String NO = "No";
+    public static final String NA = "NA";
+    public static final String INPUT_TO_MS = "Input to MS";
+    public static final String CANDIDATES_PRESENT = "Candidates present";
+
+    // Query Strings
+    public static final String CHECKER1_QUERY = "select c_request_json from FCC_MR_MATCHED_RESULT_RT WHERE N_REQUEST_ID = ? and c_request_json like ?";
+    public static final String CHECKER2_QUERY_PREFIX = "select count(*) from rt_candidates where n_run_skey = (select n_run_skey from fcc_mr_matched_result_rt where rownum=1 and n_request_id=?) and V_WATCHLIST_TYPE = ? and n_uid=? and ";
+
+    // Rule Names (preserving spaces)
+    public static final String RULE_FULL_NAME_AND_ADDRESS = "\"ruleName\":\"Full Name And Address";
+    public static final String RULE_IDENTIFIER = "\"ruleName\":\"Identifier";
+    public static final String RULE_CITY_NAME = "\"ruleName\":\"City Name";
+    public static final String RULE_COUNTRY_NAME = "\"ruleName\":\"Country Name";
+    public static final String RULE_PORT_NAME = "\"ruleName\":\"Port Name";
+    public static final String RULE_GOODS_NAME = "\"ruleName\":\"Goods Name";
+    public static final String RULE_NARRATIVE_FULL_NAME = "\"ruleName\":\"Narrative Full Name";
+    public static final String RULE_NARRATIVE_IDENTIFIER = "\"ruleName\":\"Narrative Identifier";
+    public static final String RULE_NARRATIVE_CITY = "\"ruleName\":\"Narrative City";
+    public static final String RULE_NARRATIVE_COUNTRY = "\"ruleName\":\"Narrative Country";
+    public static final String RULE_NARRATIVE_PORT = "\"ruleName\":\"Narrative Port";
+    public static final String RULE_NARRATIVE_GOODS = "\"ruleName\":\"Narrative Goods";
+    public static final String RULE_STOP_KEYWORDS = "\"ruleName\":\"Stop Keywords";
+
     public static final Map<String, String> OT_TABLE_WL_MAP;
     static {
         Map<String, String> map = new HashMap<>();
