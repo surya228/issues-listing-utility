@@ -4,6 +4,8 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.*;
@@ -14,6 +16,7 @@ import java.sql.*;
 
 public class ExcelProcessor {
 
+    private static final Logger log = LoggerFactory.getLogger(ExcelProcessor.class);
     static List<String> osHeaders;
     static List<String> otHeaders;
     static List<List<Object>> osData;
@@ -85,33 +88,30 @@ public class ExcelProcessor {
         try (Workbook wb = WorkbookFactory.create(filePath.toFile())) {
             Sheet sheet = wb.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
+            List<String> allColumns = new ArrayList<>();
             Map<String, Integer> colIndices = new HashMap<>();
             for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                 Cell cell = headerRow.getCell(i);
                 if (cell != null) {
-                    colIndices.put(cell.getStringCellValue(), i);
+                    String colName = cell.getStringCellValue();
+                    allColumns.add(colName);
+                    colIndices.put(colName, i);
                 }
             }
 
             // build headers if first file
             if (osHeaders.isEmpty()) {
-                // common
-                for (String col : colIndices.keySet()) {
-                    if (!col.startsWith("OS ") && !col.startsWith("OT ")) {
-                        osHeaders.add(col);
-                        otHeaders.add(col);
-                    }
-                }
-                // OS specific
-                for (String col : colIndices.keySet()) {
-                    if (col.startsWith("OS ")) {
+                // OS headers: common + OS + "Input to MS"
+                for (String col : allColumns) {
+                    if (!col.startsWith("OT ")) {  // include common and OS
                         osHeaders.add(col);
                     }
                 }
                 osHeaders.add("Input to MS");
-                // OT specific
-                for (String col : colIndices.keySet()) {
-                    if (col.startsWith("OT ")) {
+
+                // OT headers: common + OT + "Input to MS" + "Candidates present"
+                for (String col : allColumns) {
+                    if (!col.startsWith("OS ")) {  // include common and OT
                         otHeaders.add(col);
                     }
                 }
@@ -136,37 +136,32 @@ public class ExcelProcessor {
                     requestId = computeRequestId(row, colIndices, "OT");
                 }
 
-                List<Object> rowData = new ArrayList<>();
-                // common
-                for (String col : colIndices.keySet()) {
-                    if (!col.startsWith("OS ") && !col.startsWith("OT ")) {
-                        rowData.add(getCellValue(row, colIndices.get(col)));
-                    }
-                }
-
                 if (isOsFail) {
-                    // OS specific
-                    for (String col : colIndices.keySet()) {
-                        if (col.startsWith("OS ")) {
-                            rowData.add(getCellValue(row, colIndices.get(col)));
+                    String inputToMs = checker1(requestId, row, colIndices, "OS");
+                    List<Object> rowData = new ArrayList<>();
+                    for (String header : osHeaders) {
+                        if ("Input to MS".equals(header)) {
+                            rowData.add(inputToMs);
+                        } else {
+                            rowData.add(getCellValue(row, colIndices.get(header)));
                         }
                     }
-                    String inputToMs = checker1(requestId, row, colIndices, "OS");
-                    rowData.add(inputToMs);
                     osData.add(rowData);
                 }
 
                 if (isOtFail) {
-                    // OT specific
-                    for (String col : colIndices.keySet()) {
-                        if (col.startsWith("OT ")) {
-                            rowData.add(getCellValue(row, colIndices.get(col)));
+                    String inputToMs = checker1(requestId, row, colIndices, "OT");
+                    String candidates = checker2(requestId, row, colIndices);
+                    List<Object> rowData = new ArrayList<>();
+                    for (String header : otHeaders) {
+                        if ("Input to MS".equals(header)) {
+                            rowData.add(inputToMs);
+                        } else if ("Candidates present".equals(header)) {
+                            rowData.add(candidates);
+                        } else {
+                            rowData.add(getCellValue(row, colIndices.get(header)));
                         }
                     }
-                    String inputToMs = checker1(requestId, row, colIndices, "OT");
-                    rowData.add(inputToMs);
-                    String candidates = checker2(requestId, row, colIndices);
-                    rowData.add(candidates);
                     otData.add(rowData);
                 }
             }
