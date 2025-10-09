@@ -17,7 +17,5 @@ public class Constants {
     public static final String EXTENSION = ".xlsx";
     public static final String PROP_INPUT_DIR = "inputDirectory";
     public static final String PROP_OUTPUT_DIR = "outputDirectory";
-    public static final String PROP_OS_COL = "TestStatusOS.column";
-    public static final String PROP_OT_COL = "TestStatusOT.column";
 
 }
