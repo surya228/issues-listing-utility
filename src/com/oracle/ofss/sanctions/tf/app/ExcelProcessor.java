@@ -172,7 +172,17 @@ public class ExcelProcessor {
 
     static String computeRequestId(Row row, Map<String, Integer> colIndices, String type) {
         String transactionToken = getCellValue(row, colIndices.get(type + " Transaction Token"));
-        String messageType = getCellValue(row, colIndices.get("Message Type"));
+        String messageType = "";
+
+        for (String col : colIndices.keySet()) {
+            if (col.startsWith("Message ")) {
+                String val = getCellValue(row, colIndices.get(col));
+                if (val != null && !val.isEmpty()) {
+                    messageType = col.substring(("Message ").length());
+                    break;
+                }
+            }
+        }
         int suffix = 0;
         if ("SWIFT".equals(messageType)) suffix = 1;
         else if ("FEDWIRE".equals(messageType)) suffix = 2;
@@ -200,6 +210,7 @@ public class ExcelProcessor {
         try (PreparedStatement ps = conn.prepareStatement(query)) {
             ps.setString(1, requestId);
             ps.setString(2, "%" + searchText + "%");
+            log.info("Executing checker1 query: {} with params: requestId={}, likePattern={}", query, requestId, "%" + searchText + "%");
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     String json = rs.getString(1);
@@ -244,6 +255,7 @@ public class ExcelProcessor {
             ps.setString(1, requestId);
             ps.setString(2, nUid);
             ps.setString(3, table);
+            log.info("Executing checker2 query: {} with params: requestId={}, nUid={}, table={}, targetCol={}", query, requestId, nUid, table, targetCol);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return rs.getInt(1) > 0 ? "Yes" : "No";
