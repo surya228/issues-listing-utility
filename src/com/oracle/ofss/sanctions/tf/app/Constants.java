@@ -21,6 +21,10 @@ public class Constants {
     public static final String PROP_INPUT_DIR = "inputDirectory";
     public static final String PROP_OUTPUT_DIR = "outputDirectory";
     public static final String PROP_THREAD_POOL_SIZE = "threads";
+    public static final String PROP_EXTRACTION_ENABLED = "extractionEnabled";
+    public static final String PROP_ANALYSIS_ENABLED = "analysisEnabled";
+    public static final String PROP_OS_STATUS_FILTER = "osStatusFilter";
+    public static final String PROP_OT_STATUS_FILTER = "otStatusFilter";
     public static final String JDBC_DRIVER = "jdbcdriver";
     public static final String JDBC_URL = "jdbcurl";
     public static final String WALLET_NAME = "walletName";

@@ -23,6 +23,8 @@ public class ExcelProcessor {
     static List<String> otHeaders;
     static List<List<Object>> osData;
     static List<List<Object>> otData;
+    static List<String> allHeaders;
+    static List<List<Object>> filteredData;
     static int threadPoolSize;
     static Object headerLock = new Object();
 
@@ -48,6 +50,14 @@ public class ExcelProcessor {
         String inputDir = config.getProperty(Constants.PROP_INPUT_DIR);
         String outputDir = config.getProperty(Constants.PROP_OUTPUT_DIR, inputDir);
         threadPoolSize = Integer.parseInt(config.getProperty(Constants.PROP_THREAD_POOL_SIZE, "4"));
+        String analysisEnabled = config.getProperty(Constants.PROP_ANALYSIS_ENABLED, "Y");
+        String extractionEnabled = config.getProperty(Constants.PROP_EXTRACTION_ENABLED, "N");
+        String osStatusFilter = config.getProperty(Constants.PROP_OS_STATUS_FILTER, "PASS");
+        String otStatusFilter = config.getProperty(Constants.PROP_OT_STATUS_FILTER, "FAIL");
+
+        // Generate output filename
+        SimpleDateFormat sdf = new SimpleDateFormat(Constants.DATE_FORMAT);
+        String timestamp = sdf.format(new Date());
 
         // Ensure output directory exists
         try {
@@ -76,35 +86,41 @@ public class ExcelProcessor {
         }
 
         // Process input files concurrently
-        ExecutorService fileExecutor = Executors.newFixedThreadPool(threadPoolSize);
-        List<Future<Void>> fileFutures = new ArrayList<>();
-        for (Path filePath : files) {
-            fileFutures.add(fileExecutor.submit(() -> {
-                try {
-                    processFile(filePath);
-                } catch (Exception e) {
-                    System.err.println("Error processing file " + filePath + ": " + e.getMessage());
-                }
-                return null;
-            }));
-        }
-        for (Future<Void> f : fileFutures) {
-            try {
-                f.get();
-            } catch (Exception e) {
-                log.error("Error in file processing future: {}", e.getMessage());
+        if("Y".equalsIgnoreCase(analysisEnabled)) {
+            ExecutorService fileExecutor = Executors.newFixedThreadPool(threadPoolSize);
+            List<Future<Void>> fileFutures = new ArrayList<>();
+            for (Path filePath : files) {
+                fileFutures.add(fileExecutor.submit(() -> {
+                    try {
+                        processFile(filePath);
+                    } catch (Exception e) {
+                        System.err.println("Error processing file " + filePath + ": " + e.getMessage());
+                    }
+                    return null;
+                }));
             }
+            for (Future<Void> f : fileFutures) {
+                try {
+                    f.get();
+                } catch (Exception e) {
+                    log.error("Error in file processing future: {}", e.getMessage());
+                }
+            }
+            fileExecutor.shutdown();
+
+            String outputFile = outputDir + File.separator + Constants.OUTPUT_PREFIX + timestamp + Constants.EXTENSION;
+
+            // Write output
+            writeOutput(outputFile);
+            System.out.println("Output written to: " + outputFile);
         }
-        fileExecutor.shutdown();
 
-        // Generate output filename
-        SimpleDateFormat sdf = new SimpleDateFormat(Constants.DATE_FORMAT);
-        String timestamp = sdf.format(new Date());
-        String outputFile = outputDir + File.separator + Constants.OUTPUT_PREFIX + timestamp + Constants.EXTENSION;
-
-        // Write output
-        writeOutput(outputFile);
-        System.out.println("Output written to: " + outputFile);
+        if ("Y".equalsIgnoreCase(extractionEnabled)) {
+            processFilteredExtraction(files, osStatusFilter, otStatusFilter);
+            String filteredOutputFile = outputDir + File.separator + "OS " + osStatusFilter + " OT " + otStatusFilter + " " + timestamp + Constants.EXTENSION;
+            writeFilteredOutput(filteredOutputFile, osStatusFilter, otStatusFilter);
+            System.out.println("Filtered output written to: " + filteredOutputFile);
+        }
 
         log.info("=============================================================");
         log.info("              ISSUES LISTING UTILITY COMPLETED               ");
@@ -176,6 +192,91 @@ public class ExcelProcessor {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    static void processFilteredExtraction(List<Path> files, String osFilter, String otFilter) {
+        allHeaders = new ArrayList<>();
+        filteredData = Collections.synchronizedList(new ArrayList<>());
+        ExecutorService fileExecutor = Executors.newFixedThreadPool(threadPoolSize);
+        List<Future<Void>> fileFutures = new ArrayList<>();
+        for (Path filePath : files) {
+            fileFutures.add(fileExecutor.submit(() -> {
+                try {
+                    processFilteredFile(filePath, osFilter, otFilter);
+                } catch (Exception e) {
+                    System.err.println("Error processing file " + filePath + ": " + e.getMessage());
+                }
+                return null;
+            }));
+        }
+        for (Future<Void> f : fileFutures) {
+            try {
+                f.get();
+            } catch (Exception e) {
+                log.error("Error in filtered file processing future: {}", e.getMessage());
+            }
+        }
+        fileExecutor.shutdown();
+    }
+
+    static void processFilteredFile(Path filePath, String osFilter, String otFilter) {
+        try (Workbook wb = WorkbookFactory.create(filePath.toFile())) {
+            Sheet sheet = wb.getSheetAt(0);
+            Row headerRow = sheet.getRow(0);
+            List<String> allColumns = new ArrayList<>();
+            Map<String, Integer> colIndices = new HashMap<>();
+            for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+                Cell cell = headerRow.getCell(i);
+                if (cell != null) {
+                    String colName = cell.getStringCellValue();
+                    allColumns.add(colName);
+                    colIndices.put(colName, i);
+                }
+            }
+
+            // build headers if first file
+            synchronized(headerLock) {
+                if (allHeaders.isEmpty()) {
+                    allHeaders.addAll(allColumns);
+                }
+            }
+
+            List<List<Object>> localFilteredData = Collections.synchronizedList(new ArrayList<>());
+            ExecutorService executor = Executors.newFixedThreadPool(threadPoolSize);
+            List<Future<Void>> futures = new ArrayList<>();
+            for (int r = 1; r <= sheet.getLastRowNum(); r++) {
+                final int rowNum = r;
+                futures.add(executor.submit(() -> {
+                    try {
+                        processFilteredRow(rowNum, sheet, colIndices, localFilteredData, osFilter, otFilter);
+                    } catch (Exception e) {
+                        log.error("Error processing filtered row " + rowNum + ": " + e.getMessage());
+                    }
+                    return null;
+                }));
+            }
+            for (Future<Void> f : futures) {
+                f.get();
+            }
+            executor.shutdown();
+            filteredData.addAll(localFilteredData);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    static void processFilteredRow(int r, Sheet sheet, Map<String, Integer> colIndices, List<List<Object>> localFilteredData, String osFilter, String otFilter) {
+        Row row = sheet.getRow(r);
+        if (row == null) return;
+        String osStatus = getCellValue(row, colIndices.get(Constants.OS_TEST_STATUS));
+        String otStatus = getCellValue(row, colIndices.get(Constants.OT_TEST_STATUS));
+        if (!osFilter.equals(osStatus) || !otFilter.equals(otStatus)) return;
+
+        List<Object> rowData = new ArrayList<>();
+        for (String header : allHeaders) {
+            rowData.add(getCellValue(row, colIndices.get(header)));
+        }
+        localFilteredData.add(rowData);
     }
 
     static String computeRequestId(Row row, Map<String, Integer> colIndices, String type) {
@@ -384,6 +485,30 @@ public class ExcelProcessor {
             for (int r = 0; r < otData.size(); r++) {
                 Row row = otSheet.createRow(r + 1);
                 List<Object> data = otData.get(r);
+                for (int c = 0; c < data.size(); c++) {
+                    row.createCell(c).setCellValue(data.get(c).toString());
+                }
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+                wb.write(fos);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    static void writeFilteredOutput(String outputFile, String osFilter, String otFilter) {
+        try (Workbook wb = new XSSFWorkbook()) {
+            String sheetName = "OS " + osFilter + " OT " + otFilter;
+            Sheet sheet = wb.createSheet(sheetName);
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < allHeaders.size(); i++) {
+                headerRow.createCell(i).setCellValue(allHeaders.get(i));
+            }
+            for (int r = 0; r < filteredData.size(); r++) {
+                Row row = sheet.createRow(r + 1);
+                List<Object> data = filteredData.get(r);
                 for (int c = 0; c < data.size(); c++) {
                     row.createCell(c).setCellValue(data.get(c).toString());
                 }
