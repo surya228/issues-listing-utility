@@ -1,5 +1,6 @@
 package com.oracle.ofss.sanctions.tf.app;
 
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
@@ -29,6 +30,10 @@ public class ExcelProcessor {
         log.info("=============================================================");
         log.info("               ISSUES LISTING UTILITY STARTED                ");
         log.info("=============================================================");
+
+        // Configure Apache POI zip security to prevent zip bomb attacks
+        ZipSecureFile.setMinInflateRatio(Constants.DEFAULT_MIN_INFLATE_RATIO);
+        ZipSecureFile.setMaxEntrySize(Constants.DEFAULT_MAX_EXCEL_FILE_SIZE);
 
         Date startTimestamp = new Date();
         long executionStartMillis = System.currentTimeMillis();

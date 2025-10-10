@@ -80,6 +80,10 @@ public class Constants {
     public static final String MATCHING_ISSUE = "Matching Issue";
     public static final String OT_ISSUE = "Oracle Text Issue";
 
+    // Zip bomb protection constants
+    public static final long DEFAULT_MAX_EXCEL_FILE_SIZE = 100L * 1024 * 1024; // 100MB
+    public static final double DEFAULT_MIN_INFLATE_RATIO = 0.0d; // 0%
+
     public static final Map<String, String> OT_TABLE_WL_MAP;
     static {
         Map<String, String> map = new HashMap<>();
