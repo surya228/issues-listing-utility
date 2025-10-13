@@ -37,7 +37,6 @@ public class ExcelProcessor {
         ZipSecureFile.setMinInflateRatio(Constants.DEFAULT_MIN_INFLATE_RATIO);
         ZipSecureFile.setMaxEntrySize(Constants.DEFAULT_MAX_EXCEL_FILE_SIZE);
 
-        Date startTimestamp = new Date();
         long executionStartMillis = System.currentTimeMillis();
         Properties config = new Properties();
         try (FileInputStream fis = new FileInputStream(Constants.CONFIG_FILE_PATH)) {
@@ -54,6 +53,7 @@ public class ExcelProcessor {
         String extractionEnabled = config.getProperty(Constants.PROP_EXTRACTION_ENABLED, "N");
         String osStatusFilter = config.getProperty(Constants.PROP_OS_STATUS_FILTER, "PASS");
         String otStatusFilter = config.getProperty(Constants.PROP_OT_STATUS_FILTER, "FAIL");
+        String filters = config.getProperty(Constants.PROP_FILTERS, "");
 
         // Generate output filename
         SimpleDateFormat sdf = new SimpleDateFormat(Constants.DATE_FORMAT);
@@ -116,10 +116,31 @@ public class ExcelProcessor {
         }
 
         if ("Y".equalsIgnoreCase(extractionEnabled)) {
-            processFilteredExtraction(files, osStatusFilter, otStatusFilter);
-            String filteredOutputFile = outputDir + File.separator + "OS " + osStatusFilter + " OT " + otStatusFilter + " " + timestamp + Constants.EXTENSION;
-            writeFilteredOutput(filteredOutputFile, osStatusFilter, otStatusFilter);
-            System.out.println("Filtered output written to: " + filteredOutputFile);
+            List<String[]> filterList = new ArrayList<>();
+            if (!filters.isEmpty()) {
+                // Parse filters: OS:PASS,OT:FAIL;OS:FAIL,OT:PASS
+                String[] filterGroups = filters.split(";");
+                for (String group : filterGroups) {
+                    String[] parts = group.split(",");
+                    if (parts.length == 2) {
+                        String os = parts[0].substring(parts[0].indexOf(":") + 1);
+                        String ot = parts[1].substring(parts[1].indexOf(":") + 1);
+                        filterList.add(new String[]{os, ot});
+                    }
+                }
+            } else {
+                // Fallback to individual properties
+                filterList.add(new String[]{osStatusFilter, otStatusFilter});
+            }
+
+            for (String[] filter : filterList) {
+                String osFilter = filter[0];
+                String otFilter = filter[1];
+                processFilteredExtraction(files, osFilter, otFilter);
+                String filteredOutputFile = outputDir + File.separator + "OS " + osFilter + " OT " + otFilter + " " + timestamp + Constants.EXTENSION;
+                writeFilteredOutput(filteredOutputFile, osFilter, otFilter);
+                System.out.println("Filtered output written to: " + filteredOutputFile);
+            }
         }
 
         log.info("=============================================================");
